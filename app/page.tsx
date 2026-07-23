@@ -46,9 +46,12 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
-const SERVER_URL = "wss://live.07210700.xyz";
 const TOKEN_KEY = "livekit-contest-token";
 const GUIDE_KEY = "livekit-contest-guide-seen";
+const serverUrls = [
+  { value: "wss://live.07210700.xyz", label: "主服务器" },
+  { value: "wss://live.yee.autos:7880", label: "备用服务器" },
+];
 const resolutions = [
   { value: "720p", label: "720P", width: 1280, height: 720 },
   { value: "1080p", label: "1080P", width: 1920, height: 1080 },
@@ -74,10 +77,19 @@ export default function Home() {
   const [resolution, setResolution] = useState("720p");
   const [frameRate, setFrameRate] = useState("60");
   const [bitrate, setBitrate] = useState("6");
+  const [serverUrl, setServerUrl] = useState(() => {
+    if (typeof window === "undefined") return serverUrls[0].value;
+    const serverIndex = window.location.search
+      ? new URLSearchParams(window.location.search).get("server")
+      : null;
+    return serverUrls[serverIndex === "1" ? 1 : 0].value;
+  });
   const [token, setToken] = useState(() =>
     typeof window === "undefined"
       ? ""
-      : (window.localStorage.getItem(TOKEN_KEY) ?? ""),
+      : (new URLSearchParams(window.location.search).get("token") ||
+        window.localStorage.getItem(TOKEN_KEY) ||
+        ""),
   );
   const [showToken, setShowToken] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
@@ -376,7 +388,7 @@ export default function Home() {
         setIsStreaming(false);
         addLog("已断开 LiveKit 房间");
       });
-      await room.connect(SERVER_URL, token.trim());
+      await room.connect(serverUrl, token.trim());
       const track = trackRef.current;
       if (!track) throw new Error("摄像头轨道未准备好");
       await room.localParticipant.publishTrack(track, {
@@ -390,7 +402,7 @@ export default function Home() {
       roomRef.current = room;
       setIsStreaming(true);
       await keepScreenAwake();
-      addLog(`推流已连接：${SERVER_URL}`);
+      addLog(`推流已连接：${serverUrl}`);
     } catch (streamError) {
       roomRef.current?.disconnect();
       setError(
@@ -661,19 +673,28 @@ export default function Home() {
                         </Select>
                       </Setting>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>服务器地址</span>
+                    <Setting label="服务器">
+                      <Select value={serverUrl} onValueChange={setServerUrl} onOpenChange={setSelectOpen}>
+                        <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {serverUrls.map((server) => (
+                            <SelectItem key={server.value} value={server.value}>
+                              {server.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <button
-                        onClick={() =>
-                          void navigator.clipboard.writeText(SERVER_URL)
-                        }
-                        className="flex items-center gap-1 font-mono text-slate-700 hover:text-emerald-700"
+                        onClick={() => void navigator.clipboard.writeText(serverUrl)}
+                        className="flex items-center gap-1 self-end font-mono text-xs font-normal text-slate-700 hover:text-emerald-700"
                         title="复制服务器地址"
                       >
-                        {SERVER_URL}
+                        {serverUrl}
                         <Copy className="size-3" />
                       </button>
-                    </div>
+                    </Setting>
                   </div>
                 )}
               </div>
@@ -690,8 +711,8 @@ export default function Home() {
                   <DebugValue label="常亮" value={wakeLockActive ? "已开启" : "未开启"} active={wakeLockActive} />
                 </div>
                 <div className="mt-3 border-t border-slate-300/80 pt-3 text-slate-600">
-                  {logs.map((log) => (
-                    <p key={log} className="break-words font-mono text-[11px] leading-5">{log}</p>
+                  {logs.map((log, index) => (
+                    <p key={`${log}-${index}`} className="break-words font-mono text-[11px] leading-5">{log}</p>
                   ))}
                 </div>
               </div>
