@@ -63,6 +63,9 @@ type NavigatorWithWakeLock = Navigator & {
 
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const startPreviewRef = useRef<() => void>(() => undefined);
+  const cameraSettingsRef = useRef({ cameraId: "", resolution: "720p", frameRate: "60" });
   const trackRef = useRef<LocalVideoTrack | null>(null);
   const roomRef = useRef<Room | null>(null);
   const wakeLockRef = useRef<ScreenWakeLock | null>(null);
@@ -82,6 +85,7 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectOpen, setSelectOpen] = useState(false);
   const [uploadBitrate, setUploadBitrate] = useState("--");
   const [orientationOpen, setOrientationOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(
@@ -163,10 +167,7 @@ export default function Home() {
         },
       });
     } catch (error) {
-      if (
-        !(error instanceof DOMException) ||
-        !["OverconstrainedError", "NotReadableError"].includes(error.name)
-      )
+      if (!(error instanceof DOMException) || error.name !== "OverconstrainedError")
         throw error;
       addLog(
         `${selectedResolution.label}/${frameRate}FPS 不可用，尝试兼容模式`,
@@ -210,6 +211,20 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    startPreviewRef.current = () => void startPreview();
+  });
+
+  useEffect(() => {
+    const previousSettings = cameraSettingsRef.current;
+    const settingsChanged =
+      previousSettings.cameraId !== cameraId ||
+      previousSettings.resolution !== resolution ||
+      previousSettings.frameRate !== frameRate;
+    cameraSettingsRef.current = { cameraId, resolution, frameRate };
+    if (settingsChanged && isPreviewing && !isStreaming) startPreviewRef.current();
+  }, [cameraId, frameRate, isPreviewing, isStreaming, resolution]);
+
   async function keepScreenAwake() {
     const wakeLockNavigator = navigator as NavigatorWithWakeLock;
     if (wakeLockNavigator.wakeLock && !wakeLockRef.current) {
@@ -238,6 +253,22 @@ export default function Home() {
     return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [isStreaming]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (selectOpen) return;
+      const target = event.target as Element | null;
+      if (
+        target?.closest('[data-slot="select-content"], [data-slot="dialog-content"]')
+      ) return;
+      if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+        setSidebarOpen(false);
+      }
+    };
+    document.addEventListener("click", handleDocumentClick);
+    return () => document.removeEventListener("click", handleDocumentClick);
+  }, [selectOpen, sidebarOpen]);
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -397,7 +428,7 @@ export default function Home() {
               <OverlayStat label="实时上传" value={uploadBitrate} active={isStreaming} />
             </div>
           </div>
-          <div className={`absolute right-0 top-0 z-20 h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#f4f7f5]/95 p-4 shadow-2xl backdrop-blur-xl transition-transform duration-300 sm:p-6 ${sidebarOpen ? "translate-x-0" : "translate-x-full"}`}>
+          <div ref={sidebarRef} className={`absolute right-0 top-0 z-20 h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#f4f7f5]/95 p-4 shadow-2xl backdrop-blur-xl transition-transform duration-300 sm:p-6 ${sidebarOpen ? "translate-x-0" : "translate-x-full"}`}>
             <div className="flex flex-col gap-4 pt-14 sm:pt-12">
             <div className="flex flex-col gap-5 border-b border-slate-300/70 pb-5">
                 <div className="flex items-center justify-between">
@@ -416,7 +447,7 @@ export default function Home() {
                   hint="默认优先选择带 back / 后置 的设备"
                 >
                   <div className="flex gap-2">
-                    <Select value={cameraId} onValueChange={setCameraId}>
+                    <Select value={cameraId} onValueChange={setCameraId} onOpenChange={setSelectOpen}>
                       <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
                         <SelectValue placeholder="选择摄像头" />
                       </SelectTrigger>
@@ -464,7 +495,7 @@ export default function Home() {
                 </Setting>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Setting label="清晰度">
-                    <Select value={resolution} onValueChange={setResolution}>
+                    <Select value={resolution} onValueChange={setResolution} onOpenChange={setSelectOpen}>
                       <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
                         <SelectValue />
                       </SelectTrigger>
@@ -478,7 +509,7 @@ export default function Home() {
                     </Select>
                   </Setting>
                   <Setting label="帧率">
-                    <Select value={frameRate} onValueChange={setFrameRate}>
+                    <Select value={frameRate} onValueChange={setFrameRate} onOpenChange={setSelectOpen}>
                       <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
                         <SelectValue />
                       </SelectTrigger>
@@ -492,7 +523,7 @@ export default function Home() {
                     </Select>
                   </Setting>
                   <Setting label="码率">
-                    <Select value={bitrate} onValueChange={setBitrate}>
+                    <Select value={bitrate} onValueChange={setBitrate} onOpenChange={setSelectOpen}>
                       <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
                         <SelectValue />
                       </SelectTrigger>
@@ -673,7 +704,12 @@ export default function Home() {
             ))}
           </div>
           <DialogFooter>
-            <Button onClick={() => setGuideOpen(false)}>
+            <Button
+              onClick={() => {
+                setGuideOpen(false);
+                void startPreview();
+              }}
+            >
               <Check />
               明白了
             </Button>
