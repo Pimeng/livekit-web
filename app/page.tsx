@@ -25,6 +25,7 @@ import {
   RoomEvent,
   Track,
   createLocalVideoTrack,
+  createLocalScreenTracks,
 } from "livekit-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,10 @@ const serverUrls = [
   { value: "wss://live.07210700.xyz", label: "主服务器" },
   { value: "wss://live.yee.autos:7880", label: "备用服务器" },
 ];
+const captureModes = [
+  { value: "camera", label: "摄像头" },
+  { value: "screen", label: "共享屏幕" },
+];
 const resolutions = [
   { value: "720p", label: "720P", width: 1280, height: 720 },
   { value: "1080p", label: "1080P", width: 1920, height: 1080 },
@@ -68,12 +73,13 @@ export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const startPreviewRef = useRef<() => void>(() => undefined);
-  const cameraSettingsRef = useRef({ cameraId: "", resolution: "720p", frameRate: "60" });
+  const cameraSettingsRef = useRef({ cameraId: "", resolution: "720p", frameRate: "60", captureMode: "camera" });
   const trackRef = useRef<LocalVideoTrack | null>(null);
   const roomRef = useRef<Room | null>(null);
   const wakeLockRef = useRef<ScreenWakeLock | null>(null);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [cameraId, setCameraId] = useState("");
+  const [captureMode, setCaptureMode] = useState("camera");
   const [resolution, setResolution] = useState("720p");
   const [frameRate, setFrameRate] = useState("60");
   const [bitrate, setBitrate] = useState("6");
@@ -162,7 +168,7 @@ export default function Home() {
     };
   }, []);
 
-  function releaseCameraTrack() {
+  function releaseVideoTrack() {
     if (videoRef.current) {
       trackRef.current?.detach(videoRef.current);
       videoRef.current.pause();
@@ -202,43 +208,77 @@ export default function Home() {
     }
   }
 
+  async function createScreenTrack() {
+    try {
+      const [track] = await createLocalScreenTracks({ audio: false });
+      if (!(track instanceof LocalVideoTrack)) {
+        track?.stop();
+        throw new Error("屏幕共享没有返回视频轨道");
+      }
+      track.mediaStreamTrack.addEventListener("ended", () => {
+        if (trackRef.current === track) {
+          releaseVideoTrack();
+          addLog("屏幕共享已结束");
+        }
+      });
+      return track;
+    } catch (screenError) {
+      if (
+        screenError instanceof DOMException &&
+        screenError.name === "NotAllowedError"
+      ) {
+        throw new Error("你取消了屏幕共享，或浏览器未允许屏幕捕获。");
+      }
+      throw screenError;
+    }
+  }
+
   async function startPreview() {
     setError("");
-    releaseCameraTrack();
+    releaseVideoTrack();
     try {
-      const { available, preferredCameraId } = await refreshCameras();
-      const candidateCameraIds = [
-        cameraId || preferredCameraId,
-        ...available.map((camera) => camera.deviceId),
-      ].filter((deviceId, index, devices) => deviceId && devices.indexOf(deviceId) === index);
       let track: LocalVideoTrack | null = null;
-      let activeCameraId = "";
-      let lastCameraError: unknown;
-      for (const candidateCameraId of candidateCameraIds.length
-        ? candidateCameraIds
-        : [""]) {
-        try {
-          track = await createCameraTrack(candidateCameraId);
-          activeCameraId = candidateCameraId;
-          break;
-        } catch (cameraError) {
-          lastCameraError = cameraError;
-          const canTryNext =
-            cameraError instanceof DOMException &&
-            ["NotFoundError", "NotReadableError", "OverconstrainedError"].includes(
-              cameraError.name,
-            );
-          if (!canTryNext) throw cameraError;
-          addLog(`摄像头不可用，尝试下一个设备：${cameraError.name}`);
+      if (captureMode === "screen") {
+        track = await createScreenTrack();
+      } else {
+        const { available, preferredCameraId } = await refreshCameras();
+        const candidateCameraIds = [
+          cameraId || preferredCameraId,
+          ...available.map((camera) => camera.deviceId),
+        ].filter((deviceId, index, devices) => deviceId && devices.indexOf(deviceId) === index);
+        let activeCameraId = "";
+        let lastCameraError: unknown;
+        for (const candidateCameraId of candidateCameraIds.length
+          ? candidateCameraIds
+          : [""]) {
+          try {
+            track = await createCameraTrack(candidateCameraId);
+            activeCameraId = candidateCameraId;
+            break;
+          } catch (cameraError) {
+            lastCameraError = cameraError;
+            const canTryNext =
+              cameraError instanceof DOMException &&
+              ["NotFoundError", "NotReadableError", "OverconstrainedError"].includes(
+                cameraError.name,
+              );
+            if (!canTryNext) throw cameraError;
+            addLog(`摄像头不可用，尝试下一个设备：${cameraError.name}`);
+          }
         }
+        if (!track) throw lastCameraError ?? new Error("没有可用摄像头");
+        if (activeCameraId) setCameraId(activeCameraId);
       }
-      if (!track) throw lastCameraError ?? new Error("没有可用摄像头");
-      if (activeCameraId) setCameraId(activeCameraId);
+      if (!track) throw new Error("没有可用的视频来源");
       trackRef.current = track;
       if (videoRef.current) track.attach(videoRef.current);
       setIsPreviewing(true);
-      await refreshCameras();
-      addLog(`预览已启动：${selectedResolution.label} / ${frameRate} FPS`);
+      if (captureMode === "camera") await refreshCameras();
+      addLog(
+        captureMode === "screen"
+          ? "屏幕共享预览已启动"
+          : `预览已启动：${selectedResolution.label} / ${frameRate} FPS`,
+      );
     } catch (previewError) {
       const message =
         previewError instanceof DOMException &&
@@ -269,10 +309,11 @@ export default function Home() {
     const settingsChanged =
       previousSettings.cameraId !== cameraId ||
       previousSettings.resolution !== resolution ||
-      previousSettings.frameRate !== frameRate;
-    cameraSettingsRef.current = { cameraId, resolution, frameRate };
+      previousSettings.frameRate !== frameRate ||
+      previousSettings.captureMode !== captureMode;
+    cameraSettingsRef.current = { cameraId, resolution, frameRate, captureMode };
     if (settingsChanged && isPreviewing && !isStreaming) startPreviewRef.current();
-  }, [cameraId, frameRate, isPreviewing, isStreaming, resolution]);
+  }, [cameraId, captureMode, frameRate, isPreviewing, isStreaming, resolution]);
 
   async function keepScreenAwake() {
     const wakeLockNavigator = navigator as NavigatorWithWakeLock;
@@ -378,7 +419,7 @@ export default function Home() {
       return;
     }
     if (!trackRef.current) {
-      setError("请先点击“开始预览”，确认摄像头画面后再开始推流。");
+      setError("请先点击“开始预览”，确认画面后再开始推流。");
       return;
     }
     setError("");
@@ -392,11 +433,14 @@ export default function Home() {
       const track = trackRef.current;
       if (!track) throw new Error("摄像头轨道未准备好");
       await room.localParticipant.publishTrack(track, {
-        source: Track.Source.Camera,
+        source:
+          captureMode === "screen"
+            ? Track.Source.ScreenShare
+            : Track.Source.Camera,
         simulcast: false,
         videoEncoding: {
           maxBitrate: Number(bitrate) * 1_000_000,
-          maxFramerate: Number(frameRate),
+          maxFramerate: captureMode === "screen" ? 30 : Number(frameRate),
         },
       });
       roomRef.current = room;
@@ -417,7 +461,7 @@ export default function Home() {
   async function stopStreaming() {
     roomRef.current?.disconnect();
     roomRef.current = null;
-    releaseCameraTrack();
+    releaseVideoTrack();
     wakeLockRef.current?.release();
     wakeLockRef.current = null;
     setWakeLockActive(false);
@@ -505,60 +549,80 @@ export default function Home() {
                   <Badge variant="outline">可随时调整</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  先预览确认画面，再填写 Token 开始推流。
+                  选择一个视频来源，先预览确认画面，再填写 Token 开始推流。
                 </p>
               <div className="flex flex-col gap-5">
-                <Setting
-                  label="摄像头"
-                  hint="默认优先选择带 back / 后置 的设备"
-                >
-                  <div className="flex gap-2">
-                    <Select value={cameraId} onValueChange={setCameraId} onOpenChange={setSelectOpen}>
-                      <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
-                        <SelectValue placeholder="选择摄像头" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {cameras.map((camera, index) => (
-                          <SelectItem
-                            key={camera.deviceId}
-                            value={camera.deviceId}
-                          >
-                            {camera.label || `摄像头 ${index + 1}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="border-slate-300 bg-white/85 shadow-sm hover:bg-white"
-                      onClick={() => void refreshCameras()}
-                      aria-label="刷新摄像头列表"
-                    >
-                      <RefreshCw />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="border-slate-300 bg-white/85 shadow-sm hover:bg-white"
-                      onClick={() =>
-                        setCameraId(
-                          cameras[
-                            (cameras.findIndex(
-                              (camera) => camera.deviceId === cameraId,
-                            ) +
-                              1) %
-                              cameras.length
-                          ]?.deviceId ?? "",
-                        )
-                      }
-                      disabled={cameras.length < 2}
-                      aria-label="切换摄像头"
-                    >
-                      <FlipHorizontal />
-                    </Button>
-                  </div>
+                <Setting label="视频来源">
+                  <Select value={captureMode} onValueChange={setCaptureMode} onOpenChange={setSelectOpen}>
+                    <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {captureModes.map((mode) => (
+                        <SelectItem key={mode.value} value={mode.value}>
+                          {mode.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Setting>
+                {captureMode === "camera" ? (
+                  <Setting
+                    label="摄像头"
+                    hint="默认优先选择带 back / 后置 的设备"
+                  >
+                    <div className="flex gap-2">
+                      <Select value={cameraId} onValueChange={setCameraId} onOpenChange={setSelectOpen}>
+                        <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
+                          <SelectValue placeholder="选择摄像头" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cameras.map((camera, index) => (
+                            <SelectItem
+                              key={camera.deviceId}
+                              value={camera.deviceId}
+                            >
+                              {camera.label || `摄像头 ${index + 1}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="border-slate-300 bg-white/85 shadow-sm hover:bg-white"
+                        onClick={() => void refreshCameras()}
+                        aria-label="刷新摄像头列表"
+                      >
+                        <RefreshCw />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="border-slate-300 bg-white/85 shadow-sm hover:bg-white"
+                        onClick={() =>
+                          setCameraId(
+                            cameras[
+                              (cameras.findIndex(
+                                (camera) => camera.deviceId === cameraId,
+                              ) +
+                                1) %
+                                cameras.length
+                            ]?.deviceId ?? "",
+                          )
+                        }
+                        disabled={cameras.length < 2}
+                        aria-label="切换摄像头"
+                      >
+                        <FlipHorizontal />
+                      </Button>
+                    </div>
+                  </Setting>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 bg-white/65 px-3 py-2.5 text-sm text-slate-600">
+                    点击“开始预览”后，在浏览器弹窗中选择要共享的屏幕或窗口。
+                  </div>
+                )}
                 <Setting
                   label="LiveKit Token"
                   hint="输入后自动保存在你的浏览器中"
@@ -609,7 +673,13 @@ export default function Home() {
                   onClick={() => void startPreview()}
                   disabled={isStreaming}
                 >
-                  {isPreviewing ? "重新应用摄像头设置" : "开始预览"}
+                  {isPreviewing
+                    ? captureMode === "screen"
+                      ? "重新选择共享内容"
+                      : "重新应用摄像头设置"
+                    : captureMode === "screen"
+                      ? "开始屏幕共享"
+                      : "开始预览"}
                 </Button>
               </div>
               <div className="border-t border-slate-300/70 pt-3">
