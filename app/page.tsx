@@ -122,24 +122,25 @@ export default function Home() {
       const available = devices.filter(
         (device) => device.kind === "videoinput",
       );
+      const preferredCameraId =
+        cameraId ||
+        available.find((device) => /back|rear|后置/i.test(device.label))
+          ?.deviceId ||
+        available[0]?.deviceId ||
+        "";
       setCameras(available);
-      setCameraId(
-        (current) =>
-          current ||
-          available.find((device) => /back|rear|后置/i.test(device.label))
-            ?.deviceId ||
-          available[0]?.deviceId ||
-          "",
-      );
+      setCameraId((current) => current || preferredCameraId);
       addLog(`检测到 ${available.length} 个摄像头`);
+      return { available, preferredCameraId };
     } catch (cameraError) {
       setError(
         cameraError instanceof Error
           ? cameraError.message
           : "无法读取摄像头列表",
       );
+      return { available: [], preferredCameraId: "" };
     }
-  }, []);
+  }, [cameraId]);
 
   useEffect(() => {
     return () => {
@@ -160,12 +161,12 @@ export default function Home() {
     setIsPreviewing(false);
   }
 
-  async function createCameraTrack() {
+  async function createCameraTrack(selectedCameraId = cameraId) {
     if (!navigator.mediaDevices?.getUserMedia)
       throw new Error(
         "当前浏览器不支持摄像头访问，请使用最新版 Chrome、Safari 或 Edge。",
       );
-    const deviceId = cameraId ? { exact: cameraId } : undefined;
+    const deviceId = selectedCameraId ? { exact: selectedCameraId } : undefined;
     try {
       return await createLocalVideoTrack({
         deviceId,
@@ -193,7 +194,34 @@ export default function Home() {
     setError("");
     releaseCameraTrack();
     try {
-      const track = await createCameraTrack();
+      const { available, preferredCameraId } = await refreshCameras();
+      const candidateCameraIds = [
+        cameraId || preferredCameraId,
+        ...available.map((camera) => camera.deviceId),
+      ].filter((deviceId, index, devices) => deviceId && devices.indexOf(deviceId) === index);
+      let track: LocalVideoTrack | null = null;
+      let activeCameraId = "";
+      let lastCameraError: unknown;
+      for (const candidateCameraId of candidateCameraIds.length
+        ? candidateCameraIds
+        : [""]) {
+        try {
+          track = await createCameraTrack(candidateCameraId);
+          activeCameraId = candidateCameraId;
+          break;
+        } catch (cameraError) {
+          lastCameraError = cameraError;
+          const canTryNext =
+            cameraError instanceof DOMException &&
+            ["NotFoundError", "NotReadableError", "OverconstrainedError"].includes(
+              cameraError.name,
+            );
+          if (!canTryNext) throw cameraError;
+          addLog(`摄像头不可用，尝试下一个设备：${cameraError.name}`);
+        }
+      }
+      if (!track) throw lastCameraError ?? new Error("没有可用摄像头");
+      if (activeCameraId) setCameraId(activeCameraId);
       trackRef.current = track;
       if (videoRef.current) track.attach(videoRef.current);
       setIsPreviewing(true);
@@ -397,9 +425,6 @@ export default function Home() {
       <div className="relative size-full">
         <header className="pointer-events-none absolute left-4 right-4 top-4 z-30 flex items-center justify-end sm:left-6 sm:right-6 sm:top-6">
           <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-slate-200/70 bg-[#f4f7f5]/90 p-1 shadow-lg shadow-slate-950/10 backdrop-blur-md">
-            <Badge variant={isStreaming ? "default" : "secondary"}>
-              {isStreaming ? "正在推流" : "未连接"}
-            </Badge>
             <Button
               variant="ghost"
               size="icon"
@@ -444,17 +469,11 @@ export default function Home() {
                 {isStreaming ? "LIVE" : isPreviewing ? "PREVIEW" : "OFFLINE"}
               </div>
               {isStreaming && (
-                <div className="absolute bottom-4 right-4 rounded-lg bg-slate-950/70 px-3 py-2 text-xs text-white backdrop-blur">
+                <div className="absolute left-4 top-4 rounded-lg bg-slate-950/70 px-3 py-2 text-xs text-white backdrop-blur sm:left-6 sm:top-6">
                   <Signal className="mr-1 inline size-3" />
                   {selectedResolution.label} · {frameRate} FPS · {uploadBitrate}
                 </div>
               )}
-            </div>
-            <div className="absolute left-4 top-4 z-10 flex max-w-[calc(100vw-2rem)] flex-wrap gap-2 sm:left-6 sm:top-6">
-              <OverlayStat label="分辨率" value={selectedResolution.label} />
-              <OverlayStat label="FPS" value={`${frameRate}`} />
-              <OverlayStat label="目标码率" value={`${bitrate} Mbps`} />
-              <OverlayStat label="实时上传" value={uploadBitrate} active={isStreaming} />
             </div>
           </div>
           <div ref={sidebarRef} className={`absolute right-0 top-0 z-20 h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#f4f7f5]/95 p-4 shadow-2xl backdrop-blur-xl transition-transform duration-300 sm:p-6 ${sidebarOpen ? "translate-x-0" : "translate-x-full"}`}>
@@ -776,23 +795,6 @@ function Setting({
     </label>
   );
 }
-function OverlayStat({
-  label,
-  value,
-  active = false,
-}: {
-  label: string;
-  value: string;
-  active?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border border-white/15 bg-slate-950/55 px-3 py-2 text-white shadow-lg backdrop-blur-md">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-slate-300">{label}</p>
-      <p className={`mt-0.5 text-sm font-semibold ${active ? "text-emerald-300" : "text-white"}`}>{value}</p>
-    </div>
-  );
-}
-
 function DebugValue({
   label,
   value,
