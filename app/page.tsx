@@ -29,7 +29,7 @@ export default function Home() {
   const [cameraId, setCameraId] = useState("");
   const [resolution, setResolution] = useState("720p");
   const [frameRate, setFrameRate] = useState("60");
-  const [bitrate, setBitrate] = useState("8");
+  const [bitrate, setBitrate] = useState("6");
   const [token, setToken] = useState(() => typeof window === "undefined" ? "" : window.localStorage.getItem(TOKEN_KEY) ?? "");
   const [rememberToken, setRememberToken] = useState(true);
   const [showToken, setShowToken] = useState(false);
