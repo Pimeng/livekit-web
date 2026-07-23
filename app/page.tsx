@@ -424,7 +424,13 @@ export default function Home() {
     <main className="relative h-dvh overflow-hidden bg-slate-950 text-slate-950">
       <div className="relative size-full">
         <header className="pointer-events-none absolute left-4 right-4 top-4 z-30 flex items-center justify-end sm:left-6 sm:right-6 sm:top-6">
-          <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-slate-200/70 bg-[#f4f7f5]/90 p-1 shadow-lg shadow-slate-950/10 backdrop-blur-md">
+          <div
+            className={`pointer-events-auto flex items-center gap-1.5 ${
+              sidebarOpen
+                ? "rounded-xl border border-transparent bg-transparent p-1 shadow-none"
+                : "rounded-xl border border-slate-200/70 bg-[#f4f7f5]/90 p-1 shadow-lg shadow-slate-950/10 backdrop-blur-md"
+            }`}
+          >
             <Button
               variant="ghost"
               size="icon"
@@ -476,7 +482,7 @@ export default function Home() {
               )}
             </div>
           </div>
-          <div ref={sidebarRef} className={`absolute right-0 top-0 z-20 h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#f4f7f5]/95 p-4 shadow-2xl backdrop-blur-xl transition-transform duration-300 sm:p-6 ${sidebarOpen ? "translate-x-0" : "translate-x-full"}`}>
+          <div ref={sidebarRef} className={`absolute right-0 top-0 z-20 h-full w-full max-w-md overflow-y-auto rounded-l-2xl border-l border-white/10 bg-[#f4f7f5]/95 p-4 shadow-2xl backdrop-blur-xl transition-transform duration-300 sm:p-6 ${sidebarOpen ? "translate-x-0" : "translate-x-full"}`}>
             <div className="flex flex-col gap-4 pt-14 sm:pt-12">
             <div className="flex flex-col gap-5 border-b border-slate-300/70 pb-5">
                 <div className="flex items-center justify-between">
