@@ -4,13 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Camera,
   Check,
+  ChevronDown,
   CircleHelp,
   Copy,
   Eye,
   EyeOff,
   FlipHorizontal,
   Info,
-  KeyRound,
   MonitorUp,
   PanelRightClose,
   PanelRightOpen,
@@ -44,7 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
 
 const SERVER_URL = "wss://live.07210700.xyz";
 const TOKEN_KEY = "livekit-contest-token";
@@ -79,12 +79,12 @@ export default function Home() {
       ? ""
       : (window.localStorage.getItem(TOKEN_KEY) ?? ""),
   );
-  const [rememberToken, setRememberToken] = useState(true);
   const [showToken, setShowToken] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectOpen, setSelectOpen] = useState(false);
   const [uploadBitrate, setUploadBitrate] = useState("--");
   const [orientationOpen, setOrientationOpen] = useState(false);
@@ -106,6 +106,15 @@ export default function Home() {
         8,
       ),
     );
+
+  useEffect(() => {
+    if (token.trim()) window.localStorage.setItem(TOKEN_KEY, token.trim());
+    else window.localStorage.removeItem(TOKEN_KEY);
+  }, [token]);
+
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error]);
 
   const refreshCameras = useCallback(async () => {
     try {
@@ -227,10 +236,20 @@ export default function Home() {
 
   async function keepScreenAwake() {
     const wakeLockNavigator = navigator as NavigatorWithWakeLock;
-    if (wakeLockNavigator.wakeLock && !wakeLockRef.current) {
+    if (!wakeLockNavigator.wakeLock || wakeLockRef.current) return;
+    try {
       wakeLockRef.current = await wakeLockNavigator.wakeLock.request("screen");
       setWakeLockActive(true);
       addLog("已开启保持屏幕常亮");
+    } catch (wakeLockError) {
+      const message =
+        wakeLockError instanceof Error
+          ? wakeLockError.message
+          : "保持屏幕常亮权限未开启";
+      addLog(`保持屏幕常亮未开启：${message}`);
+      toast.warning("保持屏幕常亮权限未开启，推流仍会继续", {
+        description: "请保持页面前台，避免设备自动锁屏。",
+      });
     }
   }
 
@@ -243,10 +262,22 @@ export default function Home() {
       ) {
         const wakeLockNavigator = navigator as NavigatorWithWakeLock;
         if (wakeLockNavigator.wakeLock)
-          void wakeLockNavigator.wakeLock.request("screen").then((wakeLock) => {
-            wakeLockRef.current = wakeLock;
-            setWakeLockActive(true);
-          });
+          void wakeLockNavigator.wakeLock
+            .request("screen")
+            .then((wakeLock) => {
+              wakeLockRef.current = wakeLock;
+              setWakeLockActive(true);
+            })
+            .catch((wakeLockError) => {
+              const message =
+                wakeLockError instanceof Error
+                  ? wakeLockError.message
+                  : "保持屏幕常亮权限未开启";
+              addLog(`保持屏幕常亮未开启：${message}`);
+              toast.warning("保持屏幕常亮权限未开启，推流仍会继续", {
+                description: "请保持页面前台，避免设备自动锁屏。",
+              });
+            });
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -330,8 +361,6 @@ export default function Home() {
       });
       roomRef.current = room;
       setIsStreaming(true);
-      if (rememberToken) window.localStorage.setItem(TOKEN_KEY, token.trim());
-      else window.localStorage.removeItem(TOKEN_KEY);
       await keepScreenAwake();
       addLog(`推流已连接：${SERVER_URL}`);
     } catch (streamError) {
@@ -493,53 +522,9 @@ export default function Home() {
                     </Button>
                   </div>
                 </Setting>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Setting label="清晰度">
-                    <Select value={resolution} onValueChange={setResolution} onOpenChange={setSelectOpen}>
-                      <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {resolutions.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Setting>
-                  <Setting label="帧率">
-                    <Select value={frameRate} onValueChange={setFrameRate} onOpenChange={setSelectOpen}>
-                      <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {frameRates.map((item) => (
-                          <SelectItem key={item} value={`${item}`}>
-                            {item} FPS
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Setting>
-                  <Setting label="码率">
-                    <Select value={bitrate} onValueChange={setBitrate} onOpenChange={setSelectOpen}>
-                      <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {bitrates.map((item) => (
-                          <SelectItem key={item} value={`${item}`}>
-                            {item} Mbps
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Setting>
-                </div>
                 <Setting
                   label="LiveKit Token"
-                  hint="Token 仅保存在你的浏览器中"
+                  hint="输入后自动保存在你的浏览器中"
                 >
                   <div className="relative">
                     <Input
@@ -561,30 +546,6 @@ export default function Home() {
                     </Button>
                   </div>
                 </Setting>
-                <div className="flex items-center justify-between rounded-lg border border-slate-200/80 bg-white/65 px-3 py-2.5 shadow-sm">
-                  <div className="flex items-center gap-2 text-sm">
-                    <KeyRound className="size-4 text-slate-500" />
-                    自动记住 Token
-                  </div>
-                  <Switch
-                    checked={rememberToken}
-                    onCheckedChange={setRememberToken}
-                    aria-label="自动记住 Token"
-                  />
-                </div>
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>服务器地址</span>
-                  <button
-                    onClick={() =>
-                      void navigator.clipboard.writeText(SERVER_URL)
-                    }
-                    className="flex items-center gap-1 font-mono text-slate-700 hover:text-emerald-700"
-                    title="复制服务器地址"
-                  >
-                    {SERVER_URL}
-                    <Copy className="size-3" />
-                  </button>
-                </div>
               </div>
               <div className="flex flex-col gap-2">
                 <Button
@@ -614,13 +575,85 @@ export default function Home() {
                   {isPreviewing ? "重新应用摄像头设置" : "开始预览"}
                 </Button>
               </div>
-            </div>
-            {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                <strong>需要处理：</strong> {error}
+              <div className="border-t border-slate-300/70 pt-3">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between py-1 text-left text-sm font-medium text-slate-700 hover:text-slate-950"
+                  onClick={() => setAdvancedOpen((open) => !open)}
+                  aria-expanded={advancedOpen}
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings2 className="size-4 text-slate-500" />
+                    高级设置
+                  </span>
+                  <ChevronDown
+                    className={`size-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {advancedOpen && (
+                  <div className="mt-4 flex flex-col gap-5">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <Setting label="清晰度">
+                        <Select value={resolution} onValueChange={setResolution} onOpenChange={setSelectOpen}>
+                          <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {resolutions.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Setting>
+                      <Setting label="帧率">
+                        <Select value={frameRate} onValueChange={setFrameRate} onOpenChange={setSelectOpen}>
+                          <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {frameRates.map((item) => (
+                              <SelectItem key={item} value={`${item}`}>
+                                {item} FPS
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Setting>
+                      <Setting label="码率">
+                        <Select value={bitrate} onValueChange={setBitrate} onOpenChange={setSelectOpen}>
+                          <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {bitrates.map((item) => (
+                              <SelectItem key={item} value={`${item}`}>
+                                {item} Mbps
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Setting>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>服务器地址</span>
+                      <button
+                        onClick={() =>
+                          void navigator.clipboard.writeText(SERVER_URL)
+                        }
+                        className="flex items-center gap-1 font-mono text-slate-700 hover:text-emerald-700"
+                        title="复制服务器地址"
+                      >
+                        {SERVER_URL}
+                        <Copy className="size-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-            <section className="mx-1 rounded-lg border border-slate-300/80 bg-slate-100/55 px-3 py-4 text-slate-600">
+            </div>
+            {advancedOpen && <section className="mx-1 rounded-lg border border-slate-300/80 bg-slate-100/55 px-3 py-4 text-slate-600">
               <h2 className="flex items-center gap-2 px-1 text-base font-semibold text-slate-900">
                   <Info className="size-4 text-emerald-400" />
                   开发调试信息
@@ -637,7 +670,7 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-            </section>
+            </section>}
             </div>
           </div>
         </section>
