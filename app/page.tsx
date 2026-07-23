@@ -417,7 +417,7 @@ export default function Home() {
                 >
                   <div className="flex gap-2">
                     <Select value={cameraId} onValueChange={setCameraId}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
                         <SelectValue placeholder="选择摄像头" />
                       </SelectTrigger>
                       <SelectContent>
@@ -434,6 +434,7 @@ export default function Home() {
                     <Button
                       variant="outline"
                       size="icon"
+                      className="border-slate-300 bg-white/85 shadow-sm hover:bg-white"
                       onClick={() => void refreshCameras()}
                       aria-label="刷新摄像头列表"
                     >
@@ -442,6 +443,7 @@ export default function Home() {
                     <Button
                       variant="outline"
                       size="icon"
+                      className="border-slate-300 bg-white/85 shadow-sm hover:bg-white"
                       onClick={() =>
                         setCameraId(
                           cameras[
@@ -463,7 +465,7 @@ export default function Home() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Setting label="清晰度">
                     <Select value={resolution} onValueChange={setResolution}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -477,7 +479,7 @@ export default function Home() {
                   </Setting>
                   <Setting label="帧率">
                     <Select value={frameRate} onValueChange={setFrameRate}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -491,7 +493,7 @@ export default function Home() {
                   </Setting>
                   <Setting label="码率">
                     <Select value={bitrate} onValueChange={setBitrate}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -514,7 +516,7 @@ export default function Home() {
                       onChange={(event) => setToken(event.target.value)}
                       type={showToken ? "text" : "password"}
                       placeholder="粘贴选手 Token"
-                      className="pr-10"
+                      className="h-11 border-slate-300 bg-white/85 pr-10 shadow-sm placeholder:text-slate-400 focus-visible:bg-white"
                     />
                     <Button
                       type="button"
@@ -528,7 +530,7 @@ export default function Home() {
                     </Button>
                   </div>
                 </Setting>
-                <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5">
+                <div className="flex items-center justify-between rounded-lg border border-slate-200/80 bg-white/65 px-3 py-2.5 shadow-sm">
                   <div className="flex items-center gap-2 text-sm">
                     <KeyRound className="size-4 text-slate-500" />
                     自动记住 Token
@@ -587,29 +589,20 @@ export default function Home() {
                 <strong>需要处理：</strong> {error}
               </div>
             )}
-            <section className="border-t border-slate-300/70 pt-5 text-slate-600">
-              <h2 className="flex items-center gap-2 text-sm font-medium text-slate-900">
+            <section className="mx-1 rounded-lg border border-slate-300/80 bg-slate-100/55 px-3 py-4 text-slate-600">
+              <h2 className="flex items-center gap-2 px-1 text-base font-semibold text-slate-900">
                   <Info className="size-4 text-emerald-400" />
                   开发调试信息
               </h2>
-              <div className="mt-3 flex flex-col gap-2 font-mono text-[11px] leading-relaxed">
-                <div className="flex justify-between">
-                  <span>room status</span>
-                  <span className="text-emerald-300">
-                    {isStreaming ? "connected" : "idle"}
-                  </span>
+              <div className="mt-4 px-1 text-xs text-slate-700">
+                <div className="grid grid-cols-3 divide-x divide-slate-300/80 rounded-md border border-slate-300/70 bg-white/45 py-2">
+                  <DebugValue label="房间" value={isStreaming ? "已连接" : "未连接"} active={isStreaming} />
+                  <DebugValue label="摄像头" value={`${cameras.length} 个`} />
+                  <DebugValue label="常亮" value={wakeLockActive ? "已开启" : "未开启"} active={wakeLockActive} />
                 </div>
-                <div className="flex justify-between">
-                  <span>device count</span>
-                  <span>{cameras.length}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>wake lock</span>
-                  <span>{wakeLockActive ? "active" : "inactive"}</span>
-                </div>
-                <div className="mt-2 border-t border-slate-300/70 pt-2 text-slate-500">
+                <div className="mt-3 border-t border-slate-300/80 pt-3 text-slate-600">
                   {logs.map((log) => (
-                    <p key={log}>{log}</p>
+                    <p key={log} className="break-words font-mono text-[11px] leading-5">{log}</p>
                   ))}
                 </div>
               </div>
@@ -727,6 +720,25 @@ function OverlayStat({
     <div className="rounded-lg border border-white/15 bg-slate-950/55 px-3 py-2 text-white shadow-lg backdrop-blur-md">
       <p className="text-[10px] uppercase tracking-[0.14em] text-slate-300">{label}</p>
       <p className={`mt-0.5 text-sm font-semibold ${active ? "text-emerald-300" : "text-white"}`}>{value}</p>
+    </div>
+  );
+}
+
+function DebugValue({
+  label,
+  value,
+  active = false,
+}: {
+  label: string;
+  value: string;
+  active?: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col items-center gap-0.5 px-2 text-center">
+      <span className="text-[10px] text-slate-500">{label}</span>
+      <span className={`truncate font-mono text-[11px] font-semibold ${active ? "text-emerald-600" : "text-slate-700"}`}>
+        {value}
+      </span>
     </div>
   );
 }
