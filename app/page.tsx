@@ -697,7 +697,11 @@ export default function Home() {
               </div>
               <div className="flex flex-col gap-2">
                 <Button
-                    className="h-12 w-full bg-emerald-600 text-base shadow-lg shadow-emerald-200 hover:bg-emerald-700"
+                    className={`h-12 w-full text-base shadow-lg ${
+                      isStreaming
+                        ? "bg-red-600 shadow-red-200 hover:bg-red-700"
+                        : "bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700"
+                    }`}
                   onClick={() =>
                     void (isStreaming ? stopStreaming() : startStreaming())
                   }
