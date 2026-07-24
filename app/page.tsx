@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   Camera,
   Check,
@@ -69,6 +69,26 @@ type NavigatorWithWakeLock = Navigator & {
   wakeLock?: { request: (type: "screen") => Promise<ScreenWakeLock> };
 };
 
+function detectMobileDevice() {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+function detectScreenShareSupport() {
+  return Boolean(
+    typeof navigator !== "undefined" && navigator.mediaDevices?.getDisplayMedia,
+  );
+}
+function isScreenShareUnsupportedError(error: unknown) {
+  return (
+    (error instanceof DOMException && error.name === "NotSupportedError") ||
+    (error instanceof Error && /not supported|unsupported/i.test(error.message))
+  );
+}
+const subscribeToDeviceChanges = () => () => undefined;
+
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -80,6 +100,17 @@ export default function Home() {
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [cameraId, setCameraId] = useState("");
   const [captureMode, setCaptureMode] = useState("camera");
+  const isMobileDevice = useSyncExternalStore(
+    subscribeToDeviceChanges,
+    detectMobileDevice,
+    () => false,
+  );
+  const isScreenShareSupported = useSyncExternalStore(
+    subscribeToDeviceChanges,
+    detectScreenShareSupport,
+    () => false,
+  );
+  const [screenShareDisabled, setScreenShareDisabled] = useState(false);
   const [resolution, setResolution] = useState("720p");
   const [frameRate, setFrameRate] = useState("60");
   const [bitrate, setBitrate] = useState("6");
@@ -280,6 +311,10 @@ export default function Home() {
           : `预览已启动：${selectedResolution.label} / ${frameRate} FPS`,
       );
     } catch (previewError) {
+      if (captureMode === "screen" && isScreenShareUnsupportedError(previewError)) {
+        setScreenShareDisabled(true);
+        setCaptureMode("camera");
+      }
       const message =
         previewError instanceof DOMException &&
         previewError.name === "NotAllowedError"
@@ -558,11 +593,23 @@ export default function Home() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {captureModes.map((mode) => (
-                        <SelectItem key={mode.value} value={mode.value}>
-                          {mode.label}
-                        </SelectItem>
-                      ))}
+                      {captureModes
+                        .filter((mode) => !isMobileDevice || mode.value === "camera")
+                        .map((mode) => (
+                          <SelectItem
+                            key={mode.value}
+                            value={mode.value}
+                            disabled={
+                              mode.value === "screen" &&
+                              (!isScreenShareSupported || screenShareDisabled)
+                            }
+                          >
+                            {mode.value === "screen" &&
+                            (!isScreenShareSupported || screenShareDisabled)
+                              ? "共享屏幕（当前浏览器不支持）"
+                              : mode.label}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </Setting>
