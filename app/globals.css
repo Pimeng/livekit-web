@@ -137,3 +137,7 @@
 main {
   animation: subtle-rise 420ms ease-out both;
 }
+
+.monitor-page {
+  font-family: var(--font-geist-sans), var(--font-sans), sans-serif;
+}
