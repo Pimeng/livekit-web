@@ -92,6 +92,7 @@ export default function MonitorPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const inactivityTimerRef = useRef<number | null>(null);
   const sidebarHoveredRef = useRef(false);
+  const sidebarCloseLockRef = useRef(false);
 
   const clearInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current !== null) {
@@ -111,6 +112,7 @@ export default function MonitorPage() {
   }, [clearInactivityTimer]);
 
   const revealSidebar = useCallback(() => {
+    if (sidebarCloseLockRef.current) return;
     clearInactivityTimer();
     setIsUiVisible(true);
     setIsSidebarOpen(true);
@@ -326,9 +328,13 @@ export default function MonitorPage() {
       <main
         className="monitor-page fixed inset-0 overflow-hidden bg-black text-white"
         onPointerMove={(event) => {
-          setIsUiVisible(true);
-          if (event.clientX >= window.innerWidth - 80) revealSidebar();
-          else scheduleUiHide();
+          if (event.clientX >= window.innerWidth - 80) {
+            if (!sidebarCloseLockRef.current) revealSidebar();
+          } else {
+            sidebarCloseLockRef.current = false;
+            setIsUiVisible(true);
+            scheduleUiHide();
+          }
         }}
       >
         <div
@@ -395,6 +401,8 @@ export default function MonitorPage() {
               variant="ghost"
               size="icon-sm"
               onClick={() => {
+                clearInactivityTimer();
+                sidebarCloseLockRef.current = true;
                 sidebarHoveredRef.current = false;
                 setIsSidebarOpen(false);
                 setIsUiVisible(false);
