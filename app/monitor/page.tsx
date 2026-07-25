@@ -9,6 +9,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  PanelRightOpen,
   Radio,
   RefreshCw,
   Users,
@@ -90,33 +91,14 @@ export default function MonitorPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isUiVisible, setIsUiVisible] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const inactivityTimerRef = useRef<number | null>(null);
-  const sidebarHoveredRef = useRef(false);
-  const sidebarCloseLockRef = useRef(false);
-
-  const clearInactivityTimer = useCallback(() => {
-    if (inactivityTimerRef.current !== null) {
-      window.clearTimeout(inactivityTimerRef.current);
-      inactivityTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleUiHide = useCallback(() => {
-    clearInactivityTimer();
-    inactivityTimerRef.current = window.setTimeout(() => {
-      if (!sidebarHoveredRef.current) {
-        setIsSidebarOpen(false);
-        setIsUiVisible(false);
-      }
-    }, 1800);
-  }, [clearInactivityTimer]);
-
-  const revealSidebar = useCallback(() => {
-    if (sidebarCloseLockRef.current) return;
-    clearInactivityTimer();
+  const openSidebar = useCallback(() => {
     setIsUiVisible(true);
     setIsSidebarOpen(true);
-  }, [clearInactivityTimer]);
+  }, []);
+  const closeSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+    setIsUiVisible(false);
+  }, []);
 
   const syncParticipants = useCallback((room: Room) => {
     const nextParticipants = Array.from(room.remoteParticipants.values())
@@ -205,7 +187,7 @@ export default function MonitorPage() {
     const cleanToken = nextToken.trim();
     if (!cleanToken) {
       toast.error("Token 不能为空");
-      revealSidebar();
+      openSidebar();
       return;
     }
 
@@ -263,9 +245,9 @@ export default function MonitorPage() {
       setStatus("offline");
       setStatusMessage("连接失败，请检查 Token");
       toast.error(error instanceof Error ? error.message : "LiveKit 连接失败");
-      revealSidebar();
+      openSidebar();
     }
-  }, [clearVideo, handleTrackSubscribed, revealSidebar, selectFirstAvailable, selectParticipant, serverUrl, setSelectedIdentity, syncParticipants]);
+  }, [clearVideo, handleTrackSubscribed, openSidebar, selectFirstAvailable, selectParticipant, serverUrl, setSelectedIdentity, syncParticipants]);
 
   useEffect(() => {
     window.localStorage.setItem(SERVER_KEY, serverUrl);
@@ -290,9 +272,8 @@ export default function MonitorPage() {
       if (attachedTrackRef.current && videoElement) {
         attachedTrackRef.current.detach(videoElement);
       }
-      clearInactivityTimer();
     };
-  }, [clearInactivityTimer, connect, token]);
+  }, [connect, token]);
 
   function disconnect() {
     roomRef.current?.disconnect();
@@ -325,24 +306,7 @@ export default function MonitorPage() {
 
   return (
     <TooltipProvider>
-      <main
-        className="monitor-page fixed inset-0 overflow-hidden bg-black text-white"
-        onPointerMove={(event) => {
-          if (event.clientX >= window.innerWidth - 80) {
-            if (!sidebarCloseLockRef.current) revealSidebar();
-          } else {
-            sidebarCloseLockRef.current = false;
-            setIsUiVisible(true);
-            scheduleUiHide();
-          }
-        }}
-      >
-        <div
-          className="absolute right-0 top-0 z-30 h-full w-8"
-          onMouseEnter={revealSidebar}
-          aria-hidden="true"
-        />
-
+      <main className="monitor-page fixed inset-0 overflow-hidden bg-black text-white">
         <video
           ref={videoRef}
           autoPlay
@@ -356,7 +320,7 @@ export default function MonitorPage() {
             <div className="flex flex-col items-center gap-3 text-white/35">
               <VideoOff className="size-8" />
               <p className="text-sm">
-                {isConnected ? "等待接收选手画面" : "移动鼠标到右侧打开导播控制"}
+                {isConnected ? "等待接收选手画面" : "点击右上角打开导播控制"}
               </p>
             </div>
           </div>
@@ -375,19 +339,20 @@ export default function MonitorPage() {
           </div>
         )}
 
+        {isSidebarOpen && (
+          <button
+            type="button"
+            className="fixed inset-0 z-30 cursor-default bg-transparent"
+            onClick={closeSidebar}
+            aria-label="收起导播控制"
+          />
+        )}
+
         <aside
           className={`fixed right-0 top-0 z-40 flex h-full w-[min(88vw,360px)] flex-col border-l border-white/10 bg-[#0c1115]/95 shadow-2xl shadow-black/60 backdrop-blur-2xl transition-transform duration-300 ease-out ${
             isSidebarOpen ? "" : "pointer-events-none"
           }`}
           style={{ transform: isSidebarOpen ? "translateX(0)" : "translateX(100%)" }}
-          onMouseEnter={() => {
-            sidebarHoveredRef.current = true;
-            revealSidebar();
-          }}
-          onMouseLeave={() => {
-            sidebarHoveredRef.current = false;
-            scheduleUiHide();
-          }}
         >
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
             <div>
@@ -400,13 +365,7 @@ export default function MonitorPage() {
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={() => {
-                clearInactivityTimer();
-                sidebarCloseLockRef.current = true;
-                sidebarHoveredRef.current = false;
-                setIsSidebarOpen(false);
-                setIsUiVisible(false);
-              }}
+              onClick={closeSidebar}
               className="text-white/45 hover:text-white"
               aria-label="隐藏侧栏"
             >
@@ -626,6 +585,24 @@ export default function MonitorPage() {
             </Tooltip>
           </div>
         </aside>
+
+        {!isSidebarOpen && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={openSidebar}
+                className="fixed right-5 top-5 z-50 text-white/35 opacity-60 transition-opacity hover:bg-white/10 hover:text-white hover:opacity-100 focus-visible:opacity-100"
+                aria-label="打开导播控制"
+              >
+                <PanelRightOpen />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>打开导播控制</TooltipContent>
+          </Tooltip>
+        )}
       </main>
     </TooltipProvider>
   );
