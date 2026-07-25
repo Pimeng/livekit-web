@@ -140,30 +140,29 @@ function prettyJson(value: unknown) {
 }
 
 export default function TokenGeneratorPage() {
-  const [initialSettings] = useState(readStoredSettings);
-  const initialRole = getRole(initialSettings.role ?? "streamer").key;
-  const [apiKey, setApiKey] = useState(initialSettings.apiKey ?? "");
+  const defaultRole = "streamer";
+  const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
-  const [identity, setIdentity] = useState(initialSettings.identity ?? "");
-  const [name, setName] = useState(initialSettings.name ?? "");
-  const [ttl, setTtl] = useState(initialSettings.ttl ?? String(DEFAULT_TTL));
-  const [ttlMode, setTtlMode] = useState(getTtlMode(initialSettings.ttl ?? String(DEFAULT_TTL)));
-  const [customExpiry, setCustomExpiry] = useState(() => createCustomExpiry(initialSettings.ttl ?? String(DEFAULT_TTL)));
-  const [room, setRoom] = useState(initialSettings.room ?? "");
-  const [metadata, setMetadata] = useState(initialSettings.metadata ?? "");
-  const [kind, setKind] = useState(initialSettings.kind ?? "");
-  const [sha256, setSha256] = useState(initialSettings.sha256 ?? "");
-  const [roomPreset, setRoomPreset] = useState(initialSettings.roomPreset ?? "");
-  const [roomConfig, setRoomConfig] = useState(initialSettings.roomConfig ?? "");
-  const [attributes, setAttributes] = useState<Attribute[]>(initialSettings.attributes?.length ? initialSettings.attributes : [{ key: "", value: "" }]);
-  const [role, setRole] = useState<RoleKey>(initialRole);
+  const [identity, setIdentity] = useState("");
+  const [name, setName] = useState("");
+  const [ttl, setTtl] = useState(String(DEFAULT_TTL));
+  const [ttlMode, setTtlMode] = useState(getTtlMode(String(DEFAULT_TTL)));
+  const [customExpiry, setCustomExpiry] = useState(() => createCustomExpiry(String(DEFAULT_TTL)));
+  const [room, setRoom] = useState("");
+  const [metadata, setMetadata] = useState("");
+  const [kind, setKind] = useState("");
+  const [sha256, setSha256] = useState("");
+  const [roomPreset, setRoomPreset] = useState("");
+  const [roomConfig, setRoomConfig] = useState("");
+  const [attributes, setAttributes] = useState<Attribute[]>([{ key: "", value: "" }]);
+  const [role, setRole] = useState<RoleKey>(defaultRole);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [sipEnabled, setSipEnabled] = useState(false);
   const [inferenceEnabled, setInferenceEnabled] = useState(false);
   const [observabilityEnabled, setObservabilityEnabled] = useState(false);
-  const [videoGrant, setVideoGrant] = useState<Partial<Record<GrantKey, boolean>>>(() => getRole(initialRole).grant);
-  const [canPublishSources, setCanPublishSources] = useState<PublishSource[]>(() => getRole(initialRole).canPublishSources);
+  const [videoGrant, setVideoGrant] = useState<Partial<Record<GrantKey, boolean>>>(() => getRole(defaultRole).grant);
+  const [canPublishSources, setCanPublishSources] = useState<PublishSource[]>(() => getRole(defaultRole).canPublishSources);
   const [sipAdmin, setSipAdmin] = useState(false);
   const [sipCall, setSipCall] = useState(false);
   const [inferencePerform, setInferencePerform] = useState(false);
@@ -172,6 +171,31 @@ export default function TokenGeneratorPage() {
   const [tokenData, setTokenData] = useState<{ header: Claims; payload: Claims } | null>(null);
   const [debugMode, setDebugMode] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const stored = readStoredSettings();
+    if (stored.apiKey !== undefined) setApiKey(stored.apiKey);
+    if (stored.identity !== undefined) setIdentity(stored.identity);
+    if (stored.name !== undefined) setName(stored.name);
+    if (stored.ttl !== undefined) {
+      setTtl(stored.ttl);
+      setTtlMode(getTtlMode(stored.ttl));
+      setCustomExpiry(createCustomExpiry(stored.ttl));
+    }
+    if (stored.room !== undefined) setRoom(stored.room);
+    if (stored.metadata !== undefined) setMetadata(stored.metadata);
+    if (stored.kind !== undefined) setKind(stored.kind);
+    if (stored.sha256 !== undefined) setSha256(stored.sha256);
+    if (stored.roomPreset !== undefined) setRoomPreset(stored.roomPreset);
+    if (stored.roomConfig !== undefined) setRoomConfig(stored.roomConfig);
+    if (stored.attributes?.length) setAttributes(stored.attributes);
+    if (stored.role !== undefined) {
+      const nextRole = getRole(stored.role).key;
+      setRole(nextRole);
+      setVideoGrant(getRole(nextRole).grant);
+      setCanPublishSources(getRole(nextRole).canPublishSources);
+    }
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, identity, name, ttl, room, metadata, kind, sha256, roomPreset, roomConfig, attributes, role }));
