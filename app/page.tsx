@@ -53,7 +53,7 @@ const CUSTOM_SERVER_VALUE = "custom";
 const serverUrls = [
   { value: "wss://live.07210700.xyz", label: "主服务器" },
   { value: "wss://live.yee.autos:7880", label: "备用服务器" },
-  { value: "wss://live2.07210700.xyz", label: "备用 2 服务器" },
+  { value: "wss://live2.07210700.xyz:24443", label: "备用 2 服务器" },
 ];
 const captureModes = [
   { value: "camera", label: "摄像头" },
