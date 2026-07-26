@@ -62,7 +62,7 @@ const resolutions = [
   { value: "1080p", label: "1080P", width: 1920, height: 1080 },
   { value: "4k", label: "4K", width: 3840, height: 2160 },
 ];
-const frameRates = [30, 60];
+const frameRates = [30, 60, 120];
 const bitrates = [4, 6, 8, 12, 20];
 type ScreenWakeLock = { release: () => Promise<void> };
 type NavigatorWithWakeLock = Navigator & {
@@ -500,7 +500,7 @@ export default function Home() {
         simulcast: false,
         videoEncoding: {
           maxBitrate: Number(bitrate) * 1_000_000,
-          maxFramerate: captureMode === "screen" ? 30 : Number(frameRate),
+          maxFramerate: Number(frameRate),
         },
       });
       roomRef.current = room;
@@ -806,7 +806,7 @@ export default function Home() {
                           <SelectContent>
                             {frameRates.map((item) => (
                               <SelectItem key={item} value={`${item}`}>
-                                {item} FPS
+                                {item === 120 ? "120 FPS（实验性）" : `${item} FPS`}
                               </SelectItem>
                             ))}
                           </SelectContent>
