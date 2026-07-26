@@ -262,14 +262,18 @@ export default function Home() {
 
   async function createScreenTrack() {
     try {
-      const [track] = await createLocalScreenTracks({ audio: false });
+      const [track] = await createLocalScreenTracks({
+        audio: false,
+        selfBrowserSurface: "include",
+      });
       if (!(track instanceof LocalVideoTrack)) {
         track?.stop();
         throw new Error("屏幕共享没有返回视频轨道");
       }
       track.mediaStreamTrack.addEventListener("ended", () => {
         if (trackRef.current === track) {
-          releaseVideoTrack();
+          if (roomRef.current) void stopStreaming();
+          else releaseVideoTrack();
           addLog("屏幕共享已结束");
         }
       });
@@ -614,9 +618,7 @@ export default function Home() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {captureModes
-                        .filter((mode) => !isMobileDevice || mode.value === "camera")
-                        .map((mode) => (
+                      {captureModes.map((mode) => (
                           <SelectItem
                             key={mode.value}
                             value={mode.value}
@@ -628,7 +630,9 @@ export default function Home() {
                             {mode.value === "screen" &&
                             (!isScreenShareSupported || screenShareDisabled)
                               ? "共享屏幕（当前浏览器不支持）"
-                              : mode.label}
+                              : mode.value === "screen" && isMobileDevice
+                                ? "共享屏幕（实验性）"
+                                : mode.label}
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -689,6 +693,14 @@ export default function Home() {
                 ) : (
                   <div className="rounded-lg border border-slate-200 bg-white/65 px-3 py-2.5 text-sm text-slate-600">
                     点击“开始预览”后，在浏览器弹窗中选择要共享的屏幕或窗口。
+                    {isMobileDevice && (
+                      <span className="mt-1.5 flex items-center gap-1.5 text-amber-700">
+                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                          实验性功能
+                        </Badge>
+                        兼容性取决于设备浏览器与系统版本。
+                      </span>
+                    )}
                   </div>
                 )}
                 <Setting
