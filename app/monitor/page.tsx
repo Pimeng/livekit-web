@@ -344,9 +344,9 @@ export default function MonitorPage() {
         )}
 
         {selectedParticipant && (
-          <div className="pointer-events-none absolute bottom-5 left-5 z-10 flex items-center gap-2 rounded-md bg-black/60 px-3 py-2 backdrop-blur-sm">
-            <span className="size-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.9)]" />
-            <span className="max-w-[50vw] truncate text-sm font-medium">
+          <div className="pointer-events-none absolute bottom-6 left-6 z-10 flex items-center gap-3.5 rounded-md bg-black/60 px-5 py-3.5 backdrop-blur-sm">
+            <span className="size-3 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.9)]" />
+            <span className="max-w-[60vw] truncate text-7xl font-bold leading-none">
               {selectedParticipant.name}
             </span>
           </div>
