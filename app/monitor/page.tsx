@@ -40,9 +40,11 @@ import {
 
 const SERVER_KEY = "livekit_director_server";
 const TOKEN_KEY = "livekit_director_token";
+const CUSTOM_SERVER_VALUE = "custom";
 const serverUrls = [
   { value: "wss://live.07210700.xyz", label: "主服务器" },
   { value: "wss://live.yee.autos:7880", label: "备用服务器" },
+  { value: "wss://live2.07210700.xyz", label: "备用 2 服务器" },
 ];
 
 type ParticipantView = {
@@ -243,12 +245,9 @@ export default function MonitorPage() {
       const savedServer = window.localStorage.getItem(SERVER_KEY);
       const nextServerUrl =
         serverIndex !== null
-          ? serverIndex === "1"
-            ? serverUrls[1].value
-            : serverUrls[0].value
-          : serverUrls.some((server) => server.value === savedServer)
-            ? savedServer!
-            : serverUrls[0].value;
+          ? serverUrls[serverIndex === "1" ? 1 : serverIndex === "2" ? 2 : 0]
+              .value
+          : savedServer || serverUrls[0].value;
 
       hasRestoredConfigurationRef.current = true;
       setServerUrl(nextServerUrl);
@@ -324,6 +323,9 @@ export default function MonitorPage() {
   );
   const isConnected = status === "online";
   const isSideways = videoRotation % 180 !== 0;
+  const isCustomServer = !serverUrls.some(
+    (server) => server.value === serverUrl,
+  );
 
   return (
     <TooltipProvider>
@@ -499,7 +501,12 @@ export default function MonitorPage() {
                 <Radio className="size-3.5 text-cyan-300" />
                 LiveKit 服务器
               </div>
-              <Select value={serverUrl} onValueChange={setServerUrl}>
+              <Select
+                value={isCustomServer ? CUSTOM_SERVER_VALUE : serverUrl}
+                onValueChange={(value) =>
+                  setServerUrl(value === CUSTOM_SERVER_VALUE ? "" : value)
+                }
+              >
                 <SelectTrigger className="border-white/10 bg-black/25 text-sm text-white">
                   <SelectValue />
                 </SelectTrigger>
@@ -509,11 +516,24 @@ export default function MonitorPage() {
                       {server.label}
                     </SelectItem>
                   ))}
+                  <SelectItem value={CUSTOM_SERVER_VALUE}>
+                    自定义服务器地址
+                  </SelectItem>
                 </SelectContent>
               </Select>
-              <p className="mt-2 truncate font-mono text-[10px] text-white/35">
-                {serverUrl}
-              </p>
+              {isCustomServer ? (
+                <Input
+                  value={serverUrl}
+                  onChange={(event) => setServerUrl(event.target.value)}
+                  placeholder="wss://live.example.com"
+                  className="mt-2 border-white/10 bg-black/25 font-mono text-xs text-white placeholder:font-sans placeholder:text-white/25"
+                  aria-label="自定义 LiveKit 服务器地址"
+                />
+              ) : (
+                <p className="mt-2 truncate font-mono text-[10px] text-white/35">
+                  {serverUrl}
+                </p>
+              )}
             </div>
 
             <div className="mt-7 border-t border-white/10 pt-5">

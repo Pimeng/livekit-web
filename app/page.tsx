@@ -49,9 +49,11 @@ import { toast } from "sonner";
 
 const TOKEN_KEY = "livekit-contest-token";
 const GUIDE_KEY = "livekit-contest-guide-seen";
+const CUSTOM_SERVER_VALUE = "custom";
 const serverUrls = [
   { value: "wss://live.07210700.xyz", label: "主服务器" },
   { value: "wss://live.yee.autos:7880", label: "备用服务器" },
+  { value: "wss://live2.07210700.xyz", label: "备用 2 服务器" },
 ];
 const captureModes = [
   { value: "camera", label: "摄像头" },
@@ -119,7 +121,8 @@ export default function Home() {
     const serverIndex = window.location.search
       ? new URLSearchParams(window.location.search).get("server")
       : null;
-    return serverUrls[serverIndex === "1" ? 1 : 0].value;
+    return serverUrls[serverIndex === "1" ? 1 : serverIndex === "2" ? 2 : 0]
+      .value;
   });
   const [token, setToken] = useState(() =>
     typeof window === "undefined"
@@ -151,6 +154,9 @@ export default function Home() {
   ]);
   const selectedResolution =
     resolutions.find((item) => item.value === resolution) ?? resolutions[0];
+  const isCustomServer = !serverUrls.some(
+    (server) => server.value === serverUrl,
+  );
   const addLog = (message: string) =>
     setLogs((current) =>
       [`${new Date().toLocaleTimeString()}  ${message}`, ...current].slice(
@@ -476,6 +482,10 @@ export default function Home() {
   async function startStreaming() {
     if (!token.trim()) {
       setError("请先填写 LiveKit Token");
+      return;
+    }
+    if (!serverUrl.trim()) {
+      setError("请先填写自定义 LiveKit 服务器地址");
       return;
     }
     if (!trackRef.current) {
@@ -828,7 +838,15 @@ export default function Home() {
                       </Setting>
                     </div>
                     <Setting label="服务器">
-                      <Select value={serverUrl} onValueChange={setServerUrl} onOpenChange={setSelectOpen}>
+                      <Select
+                        value={isCustomServer ? CUSTOM_SERVER_VALUE : serverUrl}
+                        onValueChange={(value) =>
+                          setServerUrl(
+                            value === CUSTOM_SERVER_VALUE ? "" : value,
+                          )
+                        }
+                        onOpenChange={setSelectOpen}
+                      >
                         <SelectTrigger className="w-full border-slate-300 bg-white/85 shadow-sm hover:bg-white">
                           <SelectValue />
                         </SelectTrigger>
@@ -838,16 +856,28 @@ export default function Home() {
                               {server.label}
                             </SelectItem>
                           ))}
+                          <SelectItem value={CUSTOM_SERVER_VALUE}>
+                            自定义服务器地址
+                          </SelectItem>
                         </SelectContent>
                       </Select>
-                      <button
-                        onClick={() => void navigator.clipboard.writeText(serverUrl)}
-                        className="flex items-center gap-1 self-end font-mono text-xs font-normal text-slate-700 hover:text-emerald-700"
-                        title="复制服务器地址"
-                      >
-                        {serverUrl}
-                        <Copy className="size-3" />
-                      </button>
+                      {isCustomServer ? (
+                        <Input
+                          value={serverUrl}
+                          onChange={(event) => setServerUrl(event.target.value)}
+                          placeholder="wss://live.example.com"
+                          className="border-slate-300 bg-white/85 font-mono text-xs shadow-sm placeholder:font-sans"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => void navigator.clipboard.writeText(serverUrl)}
+                          className="flex items-center gap-1 self-end font-mono text-xs font-normal text-slate-700 hover:text-emerald-700"
+                          title="复制服务器地址"
+                        >
+                          {serverUrl}
+                          <Copy className="size-3" />
+                        </button>
+                      )}
                     </Setting>
                   </div>
                 )}
