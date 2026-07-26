@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
   CircleStop,
-  Copy,
+  ClipboardPaste,
   Expand,
   Eye,
   EyeOff,
@@ -43,19 +43,6 @@ const serverUrls = [
   { value: "wss://live.yee.autos:7880", label: "备用服务器" },
 ];
 
-function getInitialServerUrl() {
-  if (typeof window === "undefined") return serverUrls[0].value;
-  const params = new URLSearchParams(window.location.search);
-  const serverIndex = params.get("server");
-  if (serverIndex !== null) {
-    return serverIndex === "1" ? serverUrls[1].value : serverUrls[0].value;
-  }
-  const savedServer = window.localStorage.getItem(SERVER_KEY);
-  return serverUrls.some((server) => server.value === savedServer)
-    ? savedServer!
-    : serverUrls[0].value;
-}
-
 type ParticipantView = {
   identity: string;
   name: string;
@@ -72,15 +59,10 @@ export default function MonitorPage() {
   const roomRef = useRef<Room | null>(null);
   const currentIdentityRef = useRef<string | null>(null);
   const hasAutoConnectedRef = useRef(false);
+  const hasRestoredConfigurationRef = useRef(false);
   const attachedTrackRef = useRef<Track | null>(null);
-  const [serverUrl, setServerUrl] = useState(getInitialServerUrl);
-  const [token, setToken] = useState(() =>
-    typeof window === "undefined"
-      ? ""
-      : new URLSearchParams(window.location.search).get("token") ||
-        window.localStorage.getItem(TOKEN_KEY) ||
-        "",
-  );
+  const [serverUrl, setServerUrl] = useState(serverUrls[0].value);
+  const [token, setToken] = useState("");
   const [participants, setParticipants] = useState<ParticipantView[]>([]);
   const [currentIdentity, setCurrentIdentity] = useState<string | null>(null);
   const [status, setStatus] = useState<"offline" | "connecting" | "online">(
@@ -89,15 +71,13 @@ export default function MonitorPage() {
   const [statusMessage, setStatusMessage] = useState("等待导播连接");
   const [tokenVisible, setTokenVisible] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isUiVisible, setIsUiVisible] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isConfigurationRestored, setIsConfigurationRestored] = useState(false);
   const openSidebar = useCallback(() => {
-    setIsUiVisible(true);
     setIsSidebarOpen(true);
   }, []);
   const closeSidebar = useCallback(() => {
     setIsSidebarOpen(false);
-    setIsUiVisible(false);
   }, []);
 
   const syncParticipants = useCallback((room: Room) => {
@@ -228,7 +208,6 @@ export default function MonitorPage() {
       setStatus("online");
       setStatusMessage("房间在线，正在监听选手画面");
       setIsSidebarOpen(false);
-      setIsUiVisible(false);
       syncParticipants(room);
       window.setTimeout(() => {
         const available = Array.from(room.remoteParticipants.values()).find(
@@ -250,13 +229,43 @@ export default function MonitorPage() {
   }, [clearVideo, handleTrackSubscribed, openSidebar, selectFirstAvailable, selectParticipant, serverUrl, setSelectedIdentity, syncParticipants]);
 
   useEffect(() => {
+    if (!hasRestoredConfigurationRef.current) return;
     window.localStorage.setItem(SERVER_KEY, serverUrl);
   }, [serverUrl]);
 
   useEffect(() => {
+    const restoreConfiguration = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const serverIndex = params.get("server");
+      const savedServer = window.localStorage.getItem(SERVER_KEY);
+      const nextServerUrl =
+        serverIndex !== null
+          ? serverIndex === "1"
+            ? serverUrls[1].value
+            : serverUrls[0].value
+          : serverUrls.some((server) => server.value === savedServer)
+            ? savedServer!
+            : serverUrls[0].value;
+
+      hasRestoredConfigurationRef.current = true;
+      setServerUrl(nextServerUrl);
+      setToken(
+        params.get("token") || window.localStorage.getItem(TOKEN_KEY) || "",
+      );
+      setIsConfigurationRestored(true);
+    }, 0);
+
+    return () => window.clearTimeout(restoreConfiguration);
+  }, []);
+
+  useEffect(() => {
     const savedToken = window.localStorage.getItem(TOKEN_KEY) || "";
     const initialToken = token.trim() || savedToken;
-    if (initialToken && !hasAutoConnectedRef.current) {
+    if (
+      isConfigurationRestored &&
+      initialToken &&
+      !hasAutoConnectedRef.current
+    ) {
       hasAutoConnectedRef.current = true;
       void connect(initialToken);
     }
@@ -273,7 +282,7 @@ export default function MonitorPage() {
         attachedTrackRef.current.detach(videoElement);
       }
     };
-  }, [connect, token]);
+  }, [connect, isConfigurationRestored, token]);
 
   function disconnect() {
     roomRef.current?.disconnect();
@@ -293,10 +302,18 @@ export default function MonitorPage() {
     }
   }
 
-  async function copyToken() {
-    if (!token) return;
-    await navigator.clipboard.writeText(token);
-    toast.success("Token 已复制");
+  async function pasteToken() {
+    try {
+      const clipboardToken = await navigator.clipboard.readText();
+      if (!clipboardToken.trim()) {
+        toast.error("剪贴板中没有 Token");
+        return;
+      }
+      setToken(clipboardToken);
+      toast.success("Token 已粘贴");
+    } catch {
+      toast.error("无法读取剪贴板，请手动粘贴 Token");
+    }
   }
 
   const selectedParticipant = participants.find(
@@ -327,11 +344,7 @@ export default function MonitorPage() {
         )}
 
         {selectedParticipant && (
-          <div
-            className={`pointer-events-none absolute bottom-5 left-5 z-10 flex items-center gap-2 rounded-md bg-black/60 px-3 py-2 backdrop-blur-sm transition-opacity duration-500 ${
-              isUiVisible ? "opacity-100" : "opacity-0"
-            }`}
-          >
+          <div className="pointer-events-none absolute bottom-5 left-5 z-10 flex items-center gap-2 rounded-md bg-black/60 px-3 py-2 backdrop-blur-sm">
             <span className="size-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.9)]" />
             <span className="max-w-[50vw] truncate text-sm font-medium">
               {selectedParticipant.name}
@@ -536,22 +549,21 @@ export default function MonitorPage() {
                   )}
                   {status === "connecting" ? "连接中" : "连接房间"}
                 </Button>
-                {token && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => void copyToken()}
-                        aria-label="复制 Token"
-                      >
-                        <Copy />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>复制 Token</TooltipContent>
-                  </Tooltip>
-                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => void pasteToken()}
+                      className="border-white/10 bg-black/25 text-white/65 hover:bg-white/10 hover:text-white"
+                      aria-label="粘贴 Token"
+                    >
+                      <ClipboardPaste />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>粘贴 Token</TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </div>
