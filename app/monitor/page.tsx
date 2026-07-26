@@ -12,6 +12,8 @@ import {
   PanelRightOpen,
   Radio,
   RefreshCw,
+  RotateCcw,
+  RotateCw,
   Users,
   Video,
   VideoOff,
@@ -72,6 +74,7 @@ export default function MonitorPage() {
   const [tokenVisible, setTokenVisible] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [videoRotation, setVideoRotation] = useState(0);
   const [isConfigurationRestored, setIsConfigurationRestored] = useState(false);
   const openSidebar = useCallback(() => {
     setIsSidebarOpen(true);
@@ -320,6 +323,7 @@ export default function MonitorPage() {
     (participant) => participant.identity === currentIdentity,
   );
   const isConnected = status === "online";
+  const isSideways = videoRotation % 180 !== 0;
 
   return (
     <TooltipProvider>
@@ -329,7 +333,10 @@ export default function MonitorPage() {
           autoPlay
           playsInline
           muted
-          className="absolute inset-0 h-full w-full bg-black object-contain"
+          className={`absolute left-1/2 top-1/2 bg-black object-contain transition-transform duration-200 ${
+            isSideways ? "h-[100vw] w-[100dvh]" : "h-full w-full"
+          }`}
+          style={{ transform: `translate(-50%, -50%) rotate(${videoRotation}deg)` }}
         />
 
         {!selectedParticipant && (
@@ -507,6 +514,52 @@ export default function MonitorPage() {
               <p className="mt-2 truncate font-mono text-[10px] text-white/35">
                 {serverUrl}
               </p>
+            </div>
+
+            <div className="mt-7 border-t border-white/10 pt-5">
+              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-white/70">
+                <Video className="size-3.5 text-cyan-300" />
+                画面方向
+              </div>
+              <div className="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() =>
+                        setVideoRotation((rotation) => (rotation + 270) % 360)
+                      }
+                      className="border-white/10 bg-black/25 text-white/65 hover:bg-white/10 hover:text-white"
+                      aria-label="逆时针旋转画面"
+                    >
+                      <RotateCcw />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>逆时针旋转 90 度</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() =>
+                        setVideoRotation((rotation) => (rotation + 90) % 360)
+                      }
+                      className="border-white/10 bg-black/25 text-white/65 hover:bg-white/10 hover:text-white"
+                      aria-label="顺时针旋转画面"
+                    >
+                      <RotateCw />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>顺时针旋转 90 度</TooltipContent>
+                </Tooltip>
+                <span className="ml-1 font-mono text-[10px] text-white/35">
+                  {videoRotation}°
+                </span>
+              </div>
             </div>
 
             <div className="mt-7 border-t border-white/10 pt-5">
