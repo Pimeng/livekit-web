@@ -142,6 +142,9 @@ export default function Home() {
       typeof window === "undefined" ||
       window.localStorage.getItem(GUIDE_KEY) !== "true",
   );
+  const [guideSecondsRemaining, setGuideSecondsRemaining] = useState(8);
+  const [isGuideAcknowledgementReady, setIsGuideAcknowledgementReady] =
+    useState(false);
   const [error, setError] = useState("");
   const [logs, setLogs] = useState<string[]>([
     "等待操作。浏览器摄像头权限尚未请求",
@@ -160,6 +163,24 @@ export default function Home() {
     if (token.trim()) window.localStorage.setItem(TOKEN_KEY, token.trim());
     else window.localStorage.removeItem(TOKEN_KEY);
   }, [token]);
+
+  useEffect(() => {
+    if (!guideOpen || isGuideAcknowledgementReady) return;
+
+    const countdown = window.setInterval(() => {
+      setGuideSecondsRemaining((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    const unlockGuide = window.setTimeout(() => {
+      window.clearInterval(countdown);
+      setGuideSecondsRemaining(0);
+      setIsGuideAcknowledgementReady(true);
+    }, 8000);
+
+    return () => {
+      window.clearInterval(countdown);
+      window.clearTimeout(unlockGuide);
+    };
+  }, [guideOpen, isGuideAcknowledgementReady]);
 
   useEffect(() => {
     if (error) toast.error(error);
@@ -864,7 +885,13 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={guideOpen} onOpenChange={setGuideOpen}>
+      <Dialog
+        open={guideOpen}
+        onOpenChange={(open) => {
+          if (!open && !isGuideAcknowledgementReady) return;
+          setGuideOpen(open);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>三步完成推流</DialogTitle>
@@ -905,13 +932,20 @@ export default function Home() {
           </div>
           <DialogFooter>
             <Button
+              disabled={!isGuideAcknowledgementReady}
               onClick={() => {
                 setGuideOpen(false);
                 void startPreview();
               }}
             >
-              <Check />
-              明白了
+              {isGuideAcknowledgementReady ? (
+                <>
+                  <Check />
+                  明白了
+                </>
+              ) : (
+                `请等待 ${guideSecondsRemaining} 秒`
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
