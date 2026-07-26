@@ -55,6 +55,20 @@ const serverUrls = [
   { value: "wss://live.yee.autos:7880", label: "备用服务器" },
   { value: "wss://live2.07210700.xyz:24443", label: "备用 2 服务器" },
 ];
+function resolveServerParameter(server: string | null) {
+  if (server === "1") return serverUrls[1].value;
+  if (server === "2") return serverUrls[2].value;
+  if (!server) return serverUrls[0].value;
+
+  try {
+    const url = new URL(server);
+    return url.protocol === "ws:" || url.protocol === "wss:"
+      ? url.toString().replace(/\/$/, "")
+      : serverUrls[0].value;
+  } catch {
+    return serverUrls[0].value;
+  }
+}
 const captureModes = [
   { value: "camera", label: "摄像头" },
   { value: "screen", label: "共享屏幕" },
@@ -118,11 +132,10 @@ export default function Home() {
   const [bitrate, setBitrate] = useState("6");
   const [serverUrl, setServerUrl] = useState(() => {
     if (typeof window === "undefined") return serverUrls[0].value;
-    const serverIndex = window.location.search
+    const server = window.location.search
       ? new URLSearchParams(window.location.search).get("server")
       : null;
-    return serverUrls[serverIndex === "1" ? 1 : serverIndex === "2" ? 2 : 0]
-      .value;
+    return resolveServerParameter(server);
   });
   const [token, setToken] = useState(() =>
     typeof window === "undefined"

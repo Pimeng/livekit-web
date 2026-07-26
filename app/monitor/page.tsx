@@ -46,6 +46,20 @@ const serverUrls = [
   { value: "wss://live.yee.autos:7880", label: "备用服务器" },
   { value: "wss://live2.07210700.xyz:24443", label: "备用 2 服务器" },
 ];
+function resolveServerParameter(server: string | null) {
+  if (server === "1") return serverUrls[1].value;
+  if (server === "2") return serverUrls[2].value;
+  if (!server) return null;
+
+  try {
+    const url = new URL(server);
+    return url.protocol === "ws:" || url.protocol === "wss:"
+      ? url.toString().replace(/\/$/, "")
+      : serverUrls[0].value;
+  } catch {
+    return serverUrls[0].value;
+  }
+}
 
 type ParticipantView = {
   identity: string;
@@ -241,12 +255,11 @@ export default function MonitorPage() {
   useEffect(() => {
     const restoreConfiguration = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
-      const serverIndex = params.get("server");
+      const server = resolveServerParameter(params.get("server"));
       const savedServer = window.localStorage.getItem(SERVER_KEY);
       const nextServerUrl =
-        serverIndex !== null
-          ? serverUrls[serverIndex === "1" ? 1 : serverIndex === "2" ? 2 : 0]
-              .value
+        server !== null
+          ? server
           : savedServer || serverUrls[0].value;
 
       hasRestoredConfigurationRef.current = true;
